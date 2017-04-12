@@ -12,7 +12,7 @@ def main():
         best_lines = [line for line in ifile]
         best.take_lines(best_lines[2:])
         champion_list = [best]
-        gen_0 = generation.Generation(sys.argv[1])
+        gen_0 = generation.Generation(int(sys.argv[1]))
         gen_0.load_champ("./old_gen/")
         print "compile generation"
         gen_0.compile_gen()

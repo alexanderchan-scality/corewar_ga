@@ -23,11 +23,12 @@ MAX_INT = 2147483647
 MIN_INT = -2147483648
 
 def sp_rand(mx):
-    lim=mx*(mx+1)/2
+    lim=mx*(mx-1)/2
     a=random.randint(0,lim)
-    for i in range(mx+1):
+    for i in range(mx):
         if (a <=(i*(i+1)/2)):
             return i
+    print ("not possible")
     return (lim)
 
 def random_line():
@@ -112,11 +113,13 @@ class Champion:
 
     def compile(self):
         cmd = [asm_path, self.path]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate()
-        return (stdout, stderr, proc.returncode)
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            return (stdout, stderr, proc.returncode)
+        except:
+            return ("", "", 1)
 
-# regex here to find out who won
     def who_won(self, s):
         p = re.search('player (\d)\(.*\) won', s)
         try:
@@ -125,10 +128,9 @@ class Champion:
             # print int(val) - 1
             return int(val) - 1
         except:
-            print ("can't run corewar")
+            print ("No winner in given conditions")
             return 2
 
-# return percentage of finished procs
     def count_finished(self, procs):
         count = 0
         finished = 0
@@ -141,14 +143,16 @@ class Champion:
 
 
     def fight_group(self, list_of_enemies, thresh, timeout):
-            
-        deadline = time.time() + timeout
         procs = []
-        for enemy in list_of_enemies:
-            command = [corewar_path, self.exe, enemy.exe]
+        count = 0
+        for enemy_pair in list_of_enemies:
+            if (count % 100) == 0:
+                print ("loading fights {}".format(count))
+            command = [corewar_path, enemy_pair[0].exe, enemy_pair[1].exe]
             proc = subprocess.Popen(command, bufsize=0, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             procs.append(proc)
-
+            count += 1
+        deadline = time.time() + timeout
         poll_seconds = 1
         flag = True
         while (time.time() < deadline and flag):
@@ -171,7 +175,7 @@ class Champion:
 
     def fight(self, enemy, timeout=10):
         command = [corewar_path, self.exe, enemy.exe]
-        proc = subprocess.Popen(command, bufsize=0, stdout=subprocess.PIPE, strderr=subprocess.PIPE)
+        proc = subprocess.Popen(command, bufsize=0, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         poll_seconds = .250
         t_out = 0
         deadline = time.time() + timeout
@@ -253,27 +257,22 @@ class Generation:
             champ.compile()
 
     def isbest(self, old_champ):
-        res_1, res_2 = False, False
-        final_res = True
         for champ in self.champ_list:
             for old_champ_i in old_champ:
                 print (champ.name, "vs", old_champ_i.name)
                 res = champ.fight(old_champ_i, 10)
                 if (res[3] == 0):
-                    m = re.search("Contestant (\d),.*, has won", res[0])
-                    if (m.group(1) == '1'):
-                        res_1 = True
-                res2 = old_champ_i.fight(champ, 10)
-                if (res2[3] == 0):
-                    m = re.search("Contestant (\d),.*, has won", res2[0])
-                    if (m.group(1) == '1'):
-                        res_2 = True
-                if ((res_1) and (res_2)) or ((not res_1) and (not res_2)):
-                    final_res = False
-                elif (res_1):
-                    print (champ.name)
-                    return (True)
-        return (final_res)
+                    m = re.search('player (\d)\(.*\) won', res[0])
+                    try:
+                        if (m.group(1) == '1'):
+                            res2 = old_champ_i.fight(champ, 10)
+                            if (res2[3] == 0):
+                                m = re.search('player (\d)\(.*\) won', res2[0])
+                                if (m.group(1) == '2'):
+                                    return (True)
+                    except:
+                        pass
+        return (False)
 
     def fight(self):
         print (str(self.gid) + " fighting!!")
@@ -281,20 +280,18 @@ class Generation:
         t = (l * l - l) / 2
         c = 0
         self.score = np.zeros((l, l))
-        for i in range(l):
-            enemy_list = []
-            print ("{}".format(self.champ_list[i].name))
-            for j in range(l):
-                if (j != i):
-                    enemy_list.append(self.champ_list[j])
-            res_list = self.champ_list[i].fight_group(enemy_list, .9, 10)
-            total = 0
-            for res in range(len(res_list)):
-                if res_list[res] == 0:
-                    total += 1
-                    self.score[i,enemy_list[res].cid - 1] = 1
-                elif res_list[res] == 1:
-                    self.score[enemy_list[res].cid - 1, i] = 1
+        fight_list = []
+        for i in range(1, l):
+            for j in range(i):
+                fight_list.append((self.champ_list[i], self.champ_list[j]))
+        res_list = self.champ_list[0].fight_group(fight_list, .9, 10)
+        total = 0
+        for res in range(len(res_list)):
+            if res_list[res] == 0:
+                total += 1
+                self.score[fight_list[res][0].cid - 1,fight_list[res][1].cid - 1] = 1
+            elif res_list[res] == 1:
+                self.score[fight_list[res][1].cid - 1,fight_list[res][0].cid - 1] = 1
             print("win count %d / %d"%(total, len(res_list)))
         self.score.dump(self.folder + "scores_d.dat")
 
@@ -357,6 +354,7 @@ class Generation:
             print "trying to create guy #"+str(mut_count)+" by mutation"
             try_cnt = 0
             bot_1 = sp_rand(len(self.champ_list))
+            print ("bot_1 %d"%(bot_1))
             bot_1 = self.champ_list[bot_1]
             new_contender = None
             c_able = False
