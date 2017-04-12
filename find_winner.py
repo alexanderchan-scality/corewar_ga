@@ -5,7 +5,7 @@ def main():
 	#initial gen
 	best = generation.Champion(0, 1)
 	best_lines = None
-	with open("./old_gen/knut.s", 'r') as ifile:
+	with open("./knut.s", 'r') as ifile:
 		best_lines = [line for line in ifile]
 		best.take_lines(best_lines[2:])
 		champion_list = [best]

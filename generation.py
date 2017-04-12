@@ -9,9 +9,11 @@ import random
 import subprocess
 import numpy as np
 
+MIN_LINES = 5
+CROSS_PER = 0.05
 ELITE_NUM = 16
-CROSS_NUM = 22
-MTATE_NUM = 2
+CROSS_NUM = 14
+MTATE_NUM = 10
 
 MAX_CHAMPS = 5
 MAX_LINES = 250
@@ -90,9 +92,14 @@ class Champion:
 
     def __init__(self, gid, cid):
         self.cid = cid
-        self.name = 'gen_%d_id_%d' % (gid, cid)
-        self.path = './gen_%d/gen_%d_id_%d.s' % (gid, gid, cid)
-        self.exe = './gen_%d/gen_%d_id_%d.cor' % (gid, gid, cid)
+        if (gid >= 0):
+            self.name = 'gen_%d_id_%d' % (gid, cid)
+            self.path = './gen_%d/gen_%d_id_%d.s' % (gid, gid, cid)
+            self.exe = './gen_%d/gen_%d_id_%d.cor' % (gid, gid, cid)
+        else:
+            self.name = 'test_%d' % (cid)
+            self.path = './test_files/test_%d.s' % (cid)
+            self.exe = './test_files/test_%d.cor' % (cid)
         self.code = []
 
     def make_lines(self):
@@ -190,31 +197,48 @@ class Champion:
 
     def mutate(self):
         new_lines = self.code
-        line = random_line()
-        if (random.randint(0,1) or len(new_lines) >= 250 ):
-            mutate_ind = random.randint(0, len(new_lines) - 1)
-            new_lines[mutate_ind] = line
-        else:
-            in_loc = random.randint(0, len(new_lines) - 1)
-            new_lines.insert(in_loc, line)
-        return(new_lines)
+        num_actions = int(CROSS_PER * len(new_lines))
+        num_actions = num_actions if num_actions > MIN_LINES else MIN_LINES
+        while (num_actions):
+            rand_action = random.randint(0, 2)
+
+            rand_ind = random.randint(0, len(new_lines) - 1)
+            line = random_line()
+            if (rand_action == 0 and len(new_lines) > 5):
+            #delete
+                del new_lines[rand_ind]
+                num_actions -= 1
+            elif (rand_action == 1):
+            #insert
+                new_lines.insert(rand_ind, line) 
+                num_actions -= 1
+            elif (rand_action == 2):
+            #swap
+                new_lines[rand_ind] = line
+                num_actions -= 1
+        return (new_lines)	
 
     def crossover(self, partner):
         self_lines, part_lines = self.code, partner.code
-        line_swapped = []
-        line_nswap = [i for i in range(0, len(part_lines))]
-        percent = 0.0
-        while (percent < .05):
-            rand_ind = random.randint(0,len(line_nswap) - 1)
-            rand_line = line_nswap[rand_ind]
-            line_nswap.remove(rand_line)
-            line_swapped.append(rand_line)
-            if (len(self_lines) - 1 < rand_line):
-                part_lines[rand_line] = "\n"
-            else:
-                # print (self_lines[rand_line])
-                part_lines[rand_line] = self_lines[rand_line]
-            percent = len(line_swapped) / float(len(part_lines))
+        num_actions = int(CROSS_PER * len(part_lines))
+        num_actions = num_actions if num_actions > MIN_LINES else MIN_LINES
+        while (num_actions):
+            rand_action = random.randint(0, 2)
+
+            rand_ind = random.randint(0, len(part_lines) - 1)
+            rand_ind_2 = random.randint(0, len(self_lines) - 1)
+            if (rand_action == 0 and len(part_lines) > 5):
+            #delete
+                del part_lines[rand_ind]
+                num_actions -= 1
+            elif (rand_action == 1):
+            #insert
+                part_lines.insert(rand_ind, self_lines[rand_ind_2])
+                num_actions -= 1
+            elif (rand_action == 2):
+            #swap
+                part_lines[rand_ind] = self_lines[rand_ind_2]
+                num_actions -= 1
         return (part_lines)	
 
 class Generation:
@@ -222,7 +246,10 @@ class Generation:
     def __init__(self, gid):
         self.gid = gid
         self.champ_list = []
-        self.folder = './gen_%d/' % gid
+        if (gid >= 0):
+            self.folder = './gen_%d/' % gid
+        else:
+            self.folder = './test_files/'
         if (not os.path.exists(self.folder)):
             os.mkdir(self.folder)
 
@@ -234,6 +261,7 @@ class Generation:
 
     def load_champ(self, path):
         files = glob.glob(path + "*.s")
+        files.sort()
         cid = 1
         pedigree = []
         for f in files:
@@ -269,10 +297,27 @@ class Generation:
                             if (res2[3] == 0):
                                 m = re.search('player (\d)\(.*\) won', res2[0])
                                 if (m.group(1) == '2'):
+                                    print ("%s beats %s"%(i.name, old_champ_i.name))
                                     return (True)
                     except:
+                        print ("Exception raised")
                         pass
+        print ("We can't beat the current champion")
         return (False)
+    
+    def getMetric(self, test_gen):
+        fight_list = []
+        for i in self.champ_list:
+            for j in test_gen.champ_list:
+                fight_list.append((i, j))
+        res_list = self.champ_list[0].fight_group(fight_list, .9, 10)
+        total = 0
+        flag = False
+        for res in res_list:
+            if res_list[res] == 0:
+                total += 1
+        print ("Metric for generation %d potential: %d / %d" %
+                (self.gid, total, len(fight_list)))
 
     def fight(self):
         print (str(self.gid) + " fighting!!")
