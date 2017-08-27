@@ -1,6 +1,7 @@
 # corewar_ga
 
 An attempt at generating a Corewar champion with Genetic Algorithm methodologies: 
+
 +Elitism by keeping winners in the pool such that their traits can be inherited and culling of losing corewar champions. 
 
 +Mutation by adding variants in the pool in attempt to create one that will beat previous champions. 
